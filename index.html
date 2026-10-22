@@ -138,9 +138,27 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
   box-shadow:0 0 4px rgba(17,17,17,.45),0 0 14px rgba(17,17,17,.2);white-space:nowrap}
 .btn.ghost{background:none;color:var(--text);box-shadow:none;padding:9px 4px 9px 8px}
 .q-tip{margin:8px 0 14px;font-size:12.5px;color:var(--muted);letter-spacing:.02em}
+.q-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.sc-panel{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.sc-field{display:flex;align-items:center;gap:10px}
+.sc-field input{flex:1 1 auto;min-width:0;font:inherit;font-size:16px;color:var(--text);background:transparent;border:0;border-bottom:1.5px solid var(--text);
+  border-radius:0;padding:8px 2px;-webkit-user-select:text;user-select:text;-webkit-appearance:none;appearance:none;outline:none;
+  box-shadow:0 6px 8px -8px rgba(17,17,17,.5)}
+.sc-field input::placeholder{color:var(--muted);opacity:.8}
+.sc-field input:focus-visible{border-bottom-width:2px}
+.sc-status{margin:0;min-height:1.2em;font-size:12.5px;color:var(--muted)}
+.sc-status:empty{display:none}
+.sc-results{list-style:none;margin:0;padding:0;max-height:38vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:flex;flex-direction:column}
+.sc-results:empty{display:none}
+.sc-add{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:8px 2px;min-height:56px}
+.sc-art{flex:none;width:40px;height:40px;border-radius:50%;background:var(--ink) center/cover no-repeat;box-shadow:0 0 4px rgba(17,17,17,.35)}
+.sc-plus{flex:none;width:32px;text-align:center;font-size:20px;line-height:1}
+.sc-link{margin-top:2px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--text);text-decoration:none;
+  border-bottom:1px solid rgba(17,17,17,.4);padding:4px 0 1px;text-shadow:none}
+.artist[data-loading]::after{content:" · загрузка";letter-spacing:.2em;opacity:.7}
 .q-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 200px)}
-.q-list{position:relative;list-style:none;margin:0;padding:2px 0 0 34px;display:flex;flex-direction:column;gap:4px}
-.q-list::before{content:"";position:absolute;left:10px;top:20px;bottom:0;width:2px;background:var(--text);opacity:.55;filter:blur(.6px)}
+.q-list{position:relative;list-style:none;margin:0;padding:2px 0 0 46px;display:flex;flex-direction:column;gap:4px}
+.q-list::before{content:"";position:absolute;left:22px;top:20px;bottom:0;width:2px;background:var(--text);opacity:.55;filter:blur(.6px)}
 .row{position:relative;display:flex;align-items:center;gap:2px;min-height:58px}
 .q-drop{position:absolute;left:-46px;top:50%;translate:0 -50%;width:46px;height:46px;display:grid;place-items:center}
 .dot{width:12px;height:12px;border-radius:50%;background:var(--ink);background-size:cover;background-position:center;box-shadow:0 0 3px rgba(17,17,17,.35)}
@@ -196,6 +214,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
   <div class="meta">
     <h1 class="title" id="title">Пластинки</h1>
     <div class="artist" id="artist">&nbsp;</div>
+    <a class="sc-link" id="scLink" href="https://soundcloud.com" target="_blank" rel="noopener" hidden>Открыть на SoundCloud ↗</a>
   </div>
 
   <div class="stage" id="stage" tabindex="0" aria-label="Вода под стеклом. Крути пальцем — перемотка, тап — пауза, удержание — обложка, тап сбоку — соседний трек. Стрелки влево и вправо меняют трек.">
@@ -235,9 +254,21 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
     <div class="q-head">
       <h2>Очередь</h2>
       <span class="count" id="qCount"></span>
-      <button class="btn" id="addBtn">+ mp3</button>
       <button class="btn ghost" id="closeBtn">Готово</button>
     </div>
+    <div class="q-actions">
+      <button class="btn" id="addBtn">+ mp3</button>
+      <button class="btn" id="scBtn" aria-expanded="false" aria-controls="scPanel">+ SoundCloud</button>
+    </div>
+    <form class="sc-panel" id="scPanel" hidden>
+      <label class="sr" for="scInput">Ссылка SoundCloud или поиск</label>
+      <div class="sc-field">
+        <input id="scInput" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ссылка или название">
+        <button class="btn" id="scGo" type="submit">Найти</button>
+      </div>
+      <p class="sc-status" id="scStatus" role="status"></p>
+      <ol class="sc-results" id="scResults"></ol>
+    </form>
     <p class="q-tip">Нажми на каплю слева, чтобы поставить свою обложку.</p>
     <div class="q-scroll"><ol class="q-list" id="qList"></ol></div>
   </div>
@@ -581,17 +612,26 @@ function abortScrub(){
 function loadCurrent(autoplay){
   const t = track();
   if (!t){
-    abortScrub(); audio.pause(); audio.removeAttribute('src'); audio.load();
+    abortScrub(); dropHls(); scLoadToken++; audio.pause(); audio.removeAttribute('src'); audio.load();
     if (currentUrl) URL.revokeObjectURL(currentUrl); currentUrl = null; currentId = null;
     applyTheme(null); updateMeta(); return;
   }
   if (currentId !== t.id){
-    abortScrub();
+    abortScrub(); dropHls(); scLoadToken++;
     if (currentUrl) URL.revokeObjectURL(currentUrl);
-    currentUrl = URL.createObjectURL(t.blob);
-    audio.src = currentUrl; currentId = t.id; audio.loop = repeat;
-    scheduleDecode(t);
+    currentUrl = null; currentId = t.id; audio.loop = repeat;
     liquid.splash();
+    if (t.sc){
+      // SoundCloud: no local file, ask our server for the stream; never sped up or reversed
+      audio.pause(); audio.removeAttribute('src'); audio.load();
+      engine.buf = null; engine.bufId = null; scRetry = 0;
+      applyTheme(t); updateMeta();
+      loadSC(t, autoplay);
+      return;
+    }
+    currentUrl = URL.createObjectURL(t.blob);
+    audio.src = currentUrl;
+    scheduleDecode(t);
   }
   applyTheme(t);
   updateMeta();
@@ -618,7 +658,9 @@ function prev(){
   else go(cur - 1, isPlayingUI());
 }
 function togglePlay(){
-  if (!track()) return;
+  const t = track();
+  if (!t) return;
+  if (t.sc && !hls && !audio.currentSrc){ scPendingPlay = !scPendingPlay; if (scPendingPlay) toast('Секунду, загружаю трек…'); return; }
   if (motorOn){ cancelHandoff(); engine.gainTarget = 0; audio.pause(); updatePlayBtn(); return; }
   audio.paused ? play() : audio.pause();
 }
@@ -660,10 +702,12 @@ function updateMeta(){
     $('artist').append(t.artist || 'Неизвестный исполнитель');
     if (t.demo){ const s = document.createElement('span'); s.className = 'tag'; s.textContent = 'демо'; $('artist').append(s); }
   }
+  const scl = $('scLink');
+  if (t && t.sc && t.sc.link){ scl.href = t.sc.link; scl.hidden = false; } else scl.hidden = true;
   if ('mediaSession' in navigator && t){
     try{
       navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist || '', album: 'Пластинки',
-        artwork: t.coverUrl ? [{ src: t.coverUrl, sizes: '640x640', type: t.cover.type || 'image/jpeg' }] : [] });
+        artwork: t.coverUrl ? [{ src: t.coverUrl, sizes: '640x640', type: (t.cover && t.cover.type) || 'image/jpeg' }] : [] });
     }catch(e){}
   }
   updateNeighbors();
@@ -964,7 +1008,7 @@ function scrubTo(t){
   const d = dur();
   scrubT = clamp(t, 0, d ? d - 0.05 : 0);
   engine.target = scrubT;
-  if (!engine.ready()) seekThrottled(scrubT);
+  if (!engine.ready() && !(track() && track().sc)) seekThrottled(scrubT);
   const delta = scrubT - scrubStart;
   $('pill').innerHTML = fmt(scrubT) + '<b>' + (delta >= 0 ? '+' : '−') + fmt(Math.abs(delta)) + '</b>';
 }
@@ -1163,7 +1207,7 @@ $('coverFile').addEventListener('change', async () => {
   if (!f || !t) return;
   try{
     const { blob, color } = await processCover(f);
-    if (t.coverUrl) URL.revokeObjectURL(t.coverUrl);
+    if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl);
     t.cover = blob; t.coverUrl = URL.createObjectURL(blob); t.color = color;
     if (!t.demo) await DB.put(strip(t));
     updateNeighbors(); renderQueue();
@@ -1191,7 +1235,7 @@ const DEL_ICON = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" str
 function renderQueue(){
   const list = $('qList'); list.innerHTML = '';
   $('qCount').textContent = order.length ? order.length + ' ' + plural(order.length, ['трек','трека','треков']) : '';
-  if (!order.length){ const li = document.createElement('li'); li.className = 'q-empty'; li.textContent = 'Пока пусто. Нажми «+ mp3» и выбери файлы.'; list.append(li); return; }
+  if (!order.length){ const li = document.createElement('li'); li.className = 'q-empty'; li.textContent = 'Пока пусто. Нажми «+ mp3» или «+ SoundCloud».'; list.append(li); return; }
   order.forEach((id, i) => {
     const t = byId(id); if (!t) return;
     const li = document.createElement('li');
@@ -1204,7 +1248,7 @@ function renderQueue(){
     const main = document.createElement('button'); main.className = 'q-main'; main.dataset.i = i;
     const txt = document.createElement('span'); txt.className = 'q-text';
     const a = document.createElement('span'); a.className = 'q-title'; a.textContent = t.title;
-    const b = document.createElement('span'); b.className = 'q-artist'; b.textContent = (t.artist || 'Неизвестный исполнитель') + (t.demo ? ' · демо' : '');
+    const b = document.createElement('span'); b.className = 'q-artist'; b.textContent = (t.artist || 'Неизвестный исполнитель') + (t.demo ? ' · демо' : '') + (t.sc ? ' · SoundCloud' : '');
     txt.append(a, b);
     const du = document.createElement('span'); du.className = 'q-dur'; du.textContent = t.duration ? fmt(t.duration) : '';
     main.append(txt, du);
@@ -1232,7 +1276,7 @@ function removeTrack(id){
   const idx = order.indexOf(id), wasCur = id === currentId, wasPlaying = isPlayingUI();
   library = library.filter(x => x.id !== id);
   order = order.filter(x => x !== id);
-  if (t.coverUrl) URL.revokeObjectURL(t.coverUrl);
+  if (t.coverUrl && t.coverUrl.startsWith('blob:')) URL.revokeObjectURL(t.coverUrl);
   if (!t.demo) DB.del(id);
   if (wasCur){
     abortScrub(); audio.pause(); currentId = null;
@@ -1244,8 +1288,8 @@ function removeTrack(id){
 }
 
 /* ---------- import ---------- */
-function strip(t){ return { id: t.id, title: t.title, artist: t.artist, blob: t.blob, cover: t.cover, color: t.color || null, duration: t.duration, hue: t.hue, added: t.added }; }
-function hydrate(t){ return Object.assign({}, t, { coverUrl: t.cover ? URL.createObjectURL(t.cover) : null, demo: false }); }
+function strip(t){ return { id: t.id, title: t.title, artist: t.artist, blob: t.blob || null, cover: t.cover || null, color: t.color || null, duration: t.duration, hue: t.hue, added: t.added, sc: t.sc || null, artUrl: t.artUrl || null }; }
+function hydrate(t){ return Object.assign({}, t, { coverUrl: t.cover ? URL.createObjectURL(t.cover) : (t.artUrl || null), demo: false }); }
 function fromName(name, tags){
   const base = name.replace(/\.[^.]+$/, '').replace(/_/g, ' ').trim();
   let artist = null, title = base;
@@ -1283,6 +1327,224 @@ $('file').addEventListener('change', async () => {
   if (skipped) msg += ', пропущено: ' + skipped;
   if (unsaved) msg += '. Браузер не дал сохранить — после перезагрузки их не будет';
   toast(msg);
+});
+
+/* ---------- SoundCloud ----------
+   Everything goes through our small server (Cloudflare Worker), which keeps the secret key.
+   The library keeps only what describes a track (title, author, link, artwork address);
+   the sound itself is never stored, and SoundCloud tracks are never sped up or reversed. */
+const SC_WORKER = 'https://plastinki-token.tros98799.workers.dev';
+const HLS_JS = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js';
+let hls = null, scLoadToken = 0, scRetry = 0, scPendingPlay = false, scWanted = false;
+
+async function scFetch(path, params){
+  const q = new URLSearchParams(params).toString();
+  let res;
+  try{ res = await fetch(SC_WORKER + path + (q ? '?' + q : ''), { headers: { accept: 'application/json' } }); }
+  catch(e){ throw new Error('net'); }
+  let data = null;
+  try{ data = await res.json(); }catch(e){}
+  if (!res.ok) throw new Error((data && data.error) || ('http ' + res.status));
+  return data;
+}
+const scApi = path => scFetch('/api', { path });
+function scError(e){
+  if (e && e.message === 'net') return 'Нет связи с SoundCloud. Включён ли VPN?';
+  if (e && e.message === 'no-stream') return 'SoundCloud не отдаёт этот трек для прослушивания';
+  return 'SoundCloud не ответил, попробуй ещё раз';
+}
+function artBig(u){ return u ? u.replace('-large.', '-t500x500.') : null; }
+function fromSC(tr){
+  const user = (tr.user && tr.user.username) || '';
+  return {
+    id: 'sc-' + tr.id,
+    title: tr.title || 'Без названия',
+    artist: user,
+    sc: { urn: tr.urn || ('soundcloud:tracks:' + tr.id), link: tr.permalink_url, user, userLink: tr.user && tr.user.permalink_url, access: tr.access || 'playable' },
+    artUrl: artBig(tr.artwork_url || (tr.user && tr.user.avatar_url) || ''),
+    blob: null, cover: null, color: null,
+    duration: (tr.duration || 0) / 1000,
+    hue: hueOf(tr.title + user),
+    added: Date.now()
+  };
+}
+function playableSC(tr){ return tr && tr.kind !== 'playlist' && (tr.access || 'playable') === 'playable' && tr.streamable !== false; }
+
+// artwork colour: only works if the image host allows the browser to read the picture
+function colorOfUrl(url){
+  return new Promise(res => {
+    if (!url) return res(null);
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => { try{ res(dominantColor(im)); }catch(e){ res(null); } };
+    im.onerror = () => res(null);
+    im.src = url;
+  });
+}
+
+function loadScriptOnce(src){
+  return new Promise((res, rej) => {
+    if (document.querySelector('script[data-src="' + src + '"]')) return window.Hls ? res() : setTimeout(res, 300);
+    const s = document.createElement('script'); s.src = src; s.dataset.src = src;
+    s.onload = res; s.onerror = rej; document.head.append(s);
+  });
+}
+function dropHls(){ if (hls){ try{ hls.destroy(); }catch(e){} hls = null; } }
+
+async function attachStream(url, format){
+  dropHls();
+  if (format === 'hls' && !audio.canPlayType('application/vnd.apple.mpegurl')){
+    try{
+      await loadScriptOnce(HLS_JS);
+      if (window.Hls && window.Hls.isSupported()){
+        hls = new window.Hls({ enableWorker: true });
+        hls.on(window.Hls.Events.ERROR, (ev, d) => {
+          if (!d || !d.fatal) return;
+          const t = track();
+          if (t && t.sc && scRetry === 0){ scRetry++; loadSC(t, scWanted, audio.currentTime || 0); }
+          else toast('Поток SoundCloud оборвался');
+        });
+        hls.loadSource(url); hls.attachMedia(audio);
+        return;
+      }
+    }catch(e){}
+  }
+  audio.src = url;
+}
+
+// called by loadCurrent for SoundCloud tracks
+async function loadSC(t, autoplay, resumeAt){
+  const my = ++scLoadToken;
+  $('artist').dataset.loading = '1';
+  try{
+    const s = await scFetch('/stream', { urn: t.sc.urn });
+    if (my !== scLoadToken || currentId !== t.id) return;
+    await attachStream(s.url, s.format);
+    if (my !== scLoadToken || currentId !== t.id) return;
+    if (s.preview) toast('SoundCloud отдал только отрывок этого трека');
+    if (resumeAt) pendingSeek = { id: t.id, t: resumeAt };
+    if (autoplay || scPendingPlay) play();
+    scPendingPlay = false;
+  }catch(e){
+    scPendingPlay = false;
+    if (my === scLoadToken) toast(scError(e));
+  }finally{
+    if (my === scLoadToken) delete $('artist').dataset.loading;
+  }
+}
+// stream addresses expire after a while: on an error, fetch a fresh one once and carry on
+audio.addEventListener('error', () => {
+  const t = track();
+  if (!t || !t.sc || currentId !== t.id || scRetry > 0 || (!audio.currentSrc && !hls)) return;
+  scRetry++;
+  loadSC(t, scWanted, audio.currentTime || 0);
+});
+audio.addEventListener('playing', () => { scRetry = 0; scWanted = true; });
+audio.addEventListener('pause', () => { if (!audio.error) scWanted = false; });
+
+async function addSCTracks(list){
+  const fresh = [];
+  for (const tr of list){
+    if (!playableSC(tr)) continue;
+    const t = fromSC(tr);
+    if (byId(t.id) || fresh.some(x => x.id === t.id)) continue;
+    t.added = Date.now() + fresh.length;
+    fresh.push(t);
+  }
+  if (!fresh.length) return 0;
+  const demoPlaying = !!track()?.demo;
+  if (demoPlaying){ abortScrub(); audio.pause(); currentId = null; }
+  library = library.filter(t => !t.demo).concat(fresh);
+  for (const t of fresh) await DB.put(strip(t));
+  const keep = (currentId && byId(currentId)) ? currentId : fresh[0].id;
+  rebuildOrder(keep);
+  updateNeighbors(); loadCurrent(false); renderQueue();
+  // artwork colours in the background
+  for (const t of fresh){
+    colorOfUrl(t.artUrl).then(c => { if (c){ t.color = c; DB.put(strip(t)); if (t.id === currentId) applyTheme(t); } });
+  }
+  return fresh.length;
+}
+
+/* panel in the queue: paste a link or search */
+let scResults = [];
+function scSetStatus(msg){ $('scStatus').textContent = msg || ''; }
+function renderSCResults(){
+  const ol = $('scResults'); ol.innerHTML = '';
+  scResults.forEach((tr, i) => {
+    const li = document.createElement('li'); li.className = 'sc-row';
+    const b = document.createElement('button'); b.className = 'sc-add'; b.dataset.i = i; b.type = 'button';
+    const have = byId('sc-' + tr.id);
+    b.setAttribute('aria-label', (have ? 'Уже в очереди: ' : 'Добавить: ') + tr.title);
+    const art = document.createElement('span'); art.className = 'sc-art';
+    const au = tr.artwork_url || (tr.user && tr.user.avatar_url);
+    if (au) art.style.backgroundImage = 'url("' + au + '")';
+    const txt = document.createElement('span'); txt.className = 'q-text';
+    const a = document.createElement('span'); a.className = 'q-title'; a.textContent = tr.title;
+    const u = document.createElement('span'); u.className = 'q-artist'; u.textContent = (tr.user && tr.user.username) || '';
+    txt.append(a, u);
+    const d = document.createElement('span'); d.className = 'q-dur'; d.textContent = fmt((tr.duration || 0) / 1000);
+    const plus = document.createElement('span'); plus.className = 'sc-plus'; plus.textContent = have ? '✓' : '+';
+    b.append(art, txt, d, plus); li.append(b); ol.append(li);
+  });
+}
+const SC_HOME = location.hostname === '2g69.github.io';
+async function scSubmit(){
+  const q = $('scInput').value.trim();
+  if (!q) return;
+  if (!SC_HOME){ scSetStatus('SoundCloud работает только в версии на 2g69.github.io/plastinki'); return; }
+  $('scInput').blur();
+  scResults = []; renderSCResults();
+  if (/^https?:\/\//i.test(q)){
+    if (!/^https:\/\/(www\.|m\.|on\.)?soundcloud\.com\//i.test(q)){ scSetStatus('Это не ссылка SoundCloud'); return; }
+    scSetStatus('Открываю ссылку…');
+    try{
+      const r = await scFetch('/resolve', { url: q.replace(/^http:/i, 'https:') });
+      let tracks = [];
+      if (r.kind === 'track') tracks = [r];
+      else if (r.kind === 'playlist'){
+        scSetStatus('Загружаю плейлист…');
+        let next = '/playlists/' + (r.urn || r.id) + '/tracks?linked_partitioning=true&limit=200&access=playable';
+        for (let page = 0; next && page < 5; page++){
+          const pg = await scApi(next);
+          tracks = tracks.concat(pg.collection || []);
+          next = pg.next_href ? pg.next_href.replace(/^https:\/\/api\.soundcloud\.com/, '') : null;
+        }
+      } else { scSetStatus('Можно добавить трек или плейлист, а это ' + (r.kind === 'user' ? 'профиль' : 'что-то другое')); return; }
+      const total = tracks.length;
+      const n = await addSCTracks(tracks);
+      const skipped = total - tracks.filter(playableSC).length;
+      if (!n) scSetStatus(skipped ? 'Этот трек нельзя слушать целиком через SoundCloud API' : 'Уже в очереди');
+      else {
+        scSetStatus('');
+        toast('Добавлено: ' + n + (skipped ? ', недоступно: ' + skipped : ''));
+        $('scInput').value = '';
+      }
+    }catch(e){ scSetStatus(scError(e)); }
+    return;
+  }
+  scSetStatus('Ищу…');
+  try{
+    const r = await scApi('/tracks?q=' + encodeURIComponent(q) + '&access=playable&limit=25&linked_partitioning=true');
+    scResults = (r.collection || []).filter(playableSC);
+    renderSCResults();
+    scSetStatus(scResults.length ? '' : 'Ничего не нашлось');
+  }catch(e){ scSetStatus(scError(e)); }
+}
+$('scBtn').addEventListener('click', () => {
+  tick();
+  const p = $('scPanel'), open = p.hidden;
+  p.hidden = !open; $('scBtn').setAttribute('aria-expanded', String(open));
+  if (open) setTimeout(() => $('scInput').focus(), 60);
+});
+$('scPanel').addEventListener('submit', e => { e.preventDefault(); tick(); scSubmit(); });
+$('scResults').addEventListener('click', async e => {
+  const b = e.target.closest('.sc-add'); if (!b) return;
+  tick();
+  const tr = scResults[+b.dataset.i]; if (!tr) return;
+  if (byId('sc-' + tr.id)){ toast('Уже в очереди'); return; }
+  const n = await addSCTracks([tr]);
+  if (n){ toast('Добавлено: ' + tr.title); renderSCResults(); }
 });
 
 /* ---------- media session ---------- */
@@ -1324,6 +1586,7 @@ setInterval(() => { const t = track(); if (t && !t.demo && !holding) store.set('
   requestAnimationFrame(t => { last = t; frame(t); });
   // older saved tracks: work out a background colour from their cover
   for (const t of library){
+    if (!t.cover && t.artUrl && !t.color){ colorOfUrl(t.artUrl).then(c => { if (c){ t.color = c; DB.put(strip(t)); if (t.id === currentId) applyTheme(t); } }); continue; }
     if (t.cover && !t.color && !t.demo){
       try{ t.color = await colorOfBlob(t.cover); DB.put(strip(t)); if (t.id === currentId) applyTheme(t); }catch(e){}
     }
